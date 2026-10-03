@@ -18,20 +18,32 @@ def main() -> None:
     scheduler = Scheduler(owner)
     scheduled, skipped = scheduler.generate_daily_plan()
 
-    print("=" * 50)
-    print(f"Today's Schedule for {owner.name}")
-    print("=" * 50)
-    for task in scheduled:
-        print(
-            f"{task.time}  {task.description:<14} {task.pet_name:<6} "
-            f"{task.duration_minutes:>3} min  [{task.priority}]"
-        )
+    headers = ["Time", "Task", "Pet", "Duration", "Priority"]
+    rows = [
+        [t.time, t.description, t.pet_name, f"{t.duration_minutes} min", t.priority]
+        for t in scheduled
+    ]
+    # Size each column to its longest value so names of any length line up.
+    widths = [max(len(row[i]) for row in [headers, *rows]) for i in range(len(headers))]
+    line_width = sum(widths) + 3 * (len(widths) - 1)
+
+    def format_row(row: list[str]) -> str:
+        return " | ".join(cell.ljust(w) for cell, w in zip(row, widths))
+
+    print("=" * line_width)
+    print(f"Today's Schedule for {owner.name}".center(line_width))
+    print("=" * line_width)
+    print(format_row(headers))
+    print("-+-".join("-" * w for w in widths))
+    for row in rows:
+        print(format_row(row))
+    print("-" * line_width)
+
     for task, reason in skipped:
         print(f"Skipped: {task.description} ({task.pet_name}) — {reason}")
     for warning in scheduler.detect_conflicts(scheduled):
         print(f"Warning: {warning}")
     used = sum(t.duration_minutes for t in scheduled)
-    print("-" * 50)
     print(f"Total: {used} of {owner.available_minutes} min used")
 
 
