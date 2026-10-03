@@ -23,6 +23,7 @@ class Task:
     pet_name: str = ""  # filled in by Pet.add_task
 
     def __post_init__(self) -> None:
+        """Validate the time, priority, frequency, and duration."""
         time.fromisoformat(self.time)  # raises ValueError on a bad time
         if self.priority not in PRIORITY_RANK:
             raise ValueError(f"priority must be one of {list(PRIORITY_RANK)}")
@@ -45,6 +46,7 @@ class Task:
         return t.hour * 60 + t.minute
 
     def end_minutes(self) -> int:
+        """Minutes since midnight when this task ends."""
         return self.start_minutes() + self.duration_minutes
 
 
@@ -58,10 +60,12 @@ class Pet:
     tasks: list[Task] = field(default_factory=list)
 
     def add_task(self, task: Task) -> None:
+        """Add a task to this pet and tag it with the pet's name."""
         task.pet_name = self.name
         self.tasks.append(task)
 
     def remove_task(self, task: Task) -> None:
+        """Remove a task from this pet."""
         self.tasks.remove(task)
 
 
@@ -74,9 +78,11 @@ class Owner:
     pets: list[Pet] = field(default_factory=list)
 
     def add_pet(self, pet: Pet) -> None:
+        """Add a pet to this owner."""
         self.pets.append(pet)
 
     def get_pet(self, name: str) -> Pet | None:
+        """Return the pet with the given name, or None if there isn't one."""
         return next((p for p in self.pets if p.name == name), None)
 
     def get_all_tasks(self) -> list[Task]:
@@ -88,6 +94,7 @@ class Scheduler:
     """Retrieves, organizes, and manages tasks across all of an owner's pets."""
 
     def __init__(self, owner: Owner) -> None:
+        """Create a scheduler for the given owner's pets and tasks."""
         self.owner = owner
 
     def get_tasks_for_date(self, day: date | None = None) -> list[Task]:
@@ -99,6 +106,7 @@ class Scheduler:
         ]
 
     def sort_by_time(self, tasks: list[Task]) -> list[Task]:
+        """Return the tasks sorted by start time, earliest first."""
         return sorted(tasks, key=Task.start_minutes)
 
     def filter_tasks(
