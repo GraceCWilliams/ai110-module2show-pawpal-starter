@@ -42,6 +42,17 @@ pip install -r requirements.txt
 6. Connect your logic to the Streamlit UI in `app.py`.
 7. Refine UML so it matches what you actually built.
 
+## 🛠️ Implementation Summary
+
+The scheduling logic lives in `pawpal_system.py` and is built from four classes:
+
+- **`Task`** is one care activity, such as a walk or a feeding. It stores a start time, duration, priority (low, medium or high), frequency (once, daily or weekly), due date and whether it's done. It checks its own values when created, and `mark_complete()` marks it done and returns the next occurrence if the task repeats.
+- **`Pet`** holds a list of tasks. `add_task()` adds a task and tags it with the pet's name, so the task can be traced back to its pet later.
+- **`Owner`** holds a list of pets and the number of minutes available for pet care each day. `get_all_tasks()` gathers the tasks from every pet into one list.
+- **`Scheduler`** takes an owner and does the planning. `generate_daily_plan()` collects the unfinished tasks due that day, picks them by priority (earliest first when priorities tie) until the owner's time runs out, and returns the chosen tasks in time order along with any skipped tasks and the reason each was skipped. It can also filter tasks, flag overlapping times, and add the next occurrence of a repeating task to its pet once the current one is completed.
+
+The classes form a chain: an `Owner` has `Pet`s, each `Pet` has `Task`s, and the `Scheduler` works through the `Owner` to reach every task. `main.py` builds a sample owner, pets and tasks and prints the resulting plan, shown below.
+
 ## 🖥️ Sample Output
 
 Output from running `python main.py`, which creates an owner with two pets (Biscuit the dog and Fluffy the cat), adds four tasks out of time order, and prints the generated plan:
