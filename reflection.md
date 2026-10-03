@@ -43,10 +43,20 @@ Before drafting the UML, I identified three core actions a user should be able t
 - How did you use AI tools during this project (for example: design brainstorming, debugging, refactoring)?
 - What kinds of prompts or questions were most helpful?
 
+I used Claude Code as a coding assistant inside VS Code. I asked it to write `main.py` as a demo script that creates an owner, two pets and several tasks and then prints today's schedule. I also asked it to clean up how the schedule looked in the terminal, set up two simple pytests, and to add docstrings to the methods in `pawpal_system.py`.
+
+The most helpful prompts were short, specific requests that named the file and the exact behavior I wanted, such as "add a simple test to verify that adding a task to a Pet increases that pet's task count." When a request was more open-ended, like "create a file named tests/test_pawpal.py," the AI filled in much more than I requested.
+
 **b. Judgment and verification**
 
 - Describe one moment where you did not accept an AI suggestion as-is.
 - How did you evaluate or verify what the AI suggested?
+
+When I asked the AI to create `tests/test_pawpal.py`, it wrote 15 tests covering every class and also added a `pytest.ini` config file. The tests passed, but I hadn't asked for them, and I wanted to build up my tests step by step so I understood each one. I had it cut the file down to the two simple tests I had actually asked for: one checking that `mark_complete()` changes a task's status, and one checking that `add_task()` increases a pet's task count. I also rejected the `pytest.ini` file. I wanted the setup to be just the test file, run with `python -m pytest`. The AI explained that `python -m pytest` already lets the tests import `pawpal_system`, so the config file wasn't needed, and it removed the file.
+
+I accepted the terminal formatting change, but only after checking the output myself. The AI's first version of `main.py` lined up the columns with fixed widths, and after I renamed the pets to Biscuit and Fluffy, the "Biscuit" rows no longer lined up. The AI switched to columns that size themselves to the longest value and added a header row, and I confirmed the new table lined up by running `main.py` again.
+
+To verify the AI's work, I ran the code instead of trusting its description of it. I ran `python main.py` after each change to the demo script, ran `python -m pytest` after each change to the tests or to `pawpal_system.py`, and checked `git status` to make sure only the files I wanted were being added. I also read each test to make sure it checked a value both before and after the action, so it couldn't pass by accident.
 
 ---
 
