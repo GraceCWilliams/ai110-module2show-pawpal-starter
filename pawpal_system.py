@@ -125,8 +125,8 @@ class Scheduler:
         """Filter all tasks by pet name and/or completion status.
 
         A filter left as None is skipped, so filter_tasks() returns every
-        task and filter_tasks(pet_name="Mochi", completed=False) returns
-        Mochi's unfinished tasks. Order follows Owner.get_all_tasks.
+        task and filter_tasks(pet_name="Biscuit", completed=False) returns
+        Biscuit's unfinished tasks. Order follows Owner.get_all_tasks.
         """
         tasks = self.owner.get_all_tasks()
         if pet_name is not None:

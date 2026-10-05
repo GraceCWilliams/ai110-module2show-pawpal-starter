@@ -61,33 +61,21 @@ st.title("🐾 PawPal+")
 
 st.markdown(
     """
-Welcome to the PawPal+ starter app.
-
-This file is intentionally thin. It gives you a working Streamlit app so you can start quickly,
-but **it does not implement the project logic**. Your job is to design the system and build it.
-
-Use this app as your interactive demo once your backend classes/functions exist.
+**PawPal+** is a pet care planning assistant. It plans each day's care tasks for all of your
+pets based on how much time you have, each task's priority, and when it's scheduled.
 """
 )
 
-with st.expander("Scenario", expanded=True):
+with st.expander("How to use PawPal+", expanded=False):
     st.markdown(
         """
-**PawPal+** is a pet care planning assistant. It helps a pet owner plan care tasks
-for their pet(s) based on constraints like time, priority, and preferences.
-
-You will design and implement the scheduling logic and connect it to this Streamlit UI.
-"""
-    )
-
-with st.expander("What you need to build", expanded=True):
-    st.markdown(
-        """
-At minimum, your system should:
-- Represent pet care tasks (what needs to happen, how long it takes, priority)
-- Represent the pet and the owner (basic info and preferences)
-- Build a plan/schedule for a day that chooses and orders tasks based on constraints
-- Explain the plan (why each task was chosen and when it happens)
+1. **Owner:** set your name and how many minutes you have for pet care today.
+2. **Add a Pet:** add each of your pets.
+3. **Schedule a Task:** add care tasks with a time, duration, priority, and how often they repeat.
+4. **Tasks:** filter the list by pet or status, check any time conflicts, and mark tasks complete.
+   Daily and weekly tasks automatically come back for their next occurrence.
+5. **Build Schedule:** generate today's plan. High-priority tasks are planned first, and tasks
+   that don't fit in your time are listed with the reason.
 """
     )
 
@@ -95,7 +83,7 @@ st.divider()
 
 # Keep the Owner in session state so pets and tasks survive Streamlit reruns.
 if "owner" not in st.session_state:
-    st.session_state.owner = Owner(name="Jordan")
+    st.session_state.owner = Owner(name="Grace", available_minutes=90)
 owner = st.session_state.owner
 scheduler = Scheduler(owner)
 
@@ -114,11 +102,17 @@ with col2:
     )
 
 st.subheader("Add a Pet")
+# Suggest the same sample pets as main.py, one at a time, until both are added.
+SAMPLE_PETS = [("Biscuit", "dog"), ("Fluffy", "cat")]
+suggested_name, suggested_species = next(
+    ((n, s) for n, s in SAMPLE_PETS if owner.get_pet(n) is None), ("", "dog")
+)
+SPECIES = ["dog", "cat", "other"]
 col1, col2, col3 = st.columns(3)
 with col1:
-    pet_name = st.text_input("Pet name", value="Mochi")
+    pet_name = st.text_input("Pet name", value=suggested_name)
 with col2:
-    species = st.selectbox("Species", ["dog", "cat", "other"])
+    species = st.selectbox("Species", SPECIES, index=SPECIES.index(suggested_species))
 with col3:
     age = st.number_input("Age", min_value=0, max_value=40, value=0)
 
@@ -129,7 +123,12 @@ if st.button("Add pet"):
         st.error(f"{owner.name} already has a pet named {pet_name}.")
     else:
         owner.add_pet(Pet(name=pet_name, species=species, age=int(age)))
-        st.success(f"Added {pet_name}.")
+        st.session_state.pet_flash = f"Added {pet_name}."
+        st.rerun()  # refresh so the form suggests the next sample pet right away
+
+# Message from the last "Add pet" click, shown after the rerun.
+if "pet_flash" in st.session_state:
+    st.success(st.session_state.pop("pet_flash"))
 
 if owner.pets:
     st.dataframe(

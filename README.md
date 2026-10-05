@@ -32,6 +32,18 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+### Running PawPal+
+
+Run these from the project folder with the virtual environment active:
+
+```bash
+streamlit run app.py   # interactive app in the browser
+python main.py         # demo script that prints sample results in the terminal
+python -m pytest       # automated tests
+```
+
+See the [Demo Walkthrough](#-demo-walkthrough) for what each one shows. The class diagram is in [`diagrams/uml.mmd`](diagrams/uml.mmd).
+
 ### Suggested workflow
 
 1. Read the scenario carefully and identify requirements and edge cases.
@@ -66,27 +78,9 @@ The scheduling logic lives in `pawpal_system.py` and is built from four classes:
 - **`Owner`** holds a list of pets and the number of minutes available for pet care each day. `get_all_tasks()` gathers the tasks from every pet into one list.
 - **`Scheduler`** takes an owner and does the planning. `generate_daily_plan()` collects the unfinished tasks due that day, picks them by priority (earliest first when priorities tie) until the owner's time runs out, and returns the chosen tasks in time order along with any skipped tasks and the reason each was skipped. It can also filter tasks, flag overlapping times, and add the next occurrence of a repeating task to its pet once the current one is completed.
 
-The classes form a chain: an `Owner` has `Pet`s, each `Pet` has `Task`s, and the `Scheduler` works through the `Owner` to reach every task. `main.py` builds a sample owner, pets and tasks and prints the resulting plan, shown below.
+The classes form a chain: an `Owner` has `Pet`s, each `Pet` has `Task`s, and the `Scheduler` works through the `Owner` to reach every task. `main.py` builds a sample owner, pets and tasks and prints the results; its full output is in the [Demo Walkthrough](#-demo-walkthrough).
 
-## 🖥️ Sample Output
-
-Output from running `python main.py`, which creates an owner with two pets (Biscuit the dog and Fluffy the cat), adds four tasks out of time order, and prints the generated plan:
-
-```
-====================================================
-             Today's Schedule for Grace
-====================================================
-Time  | Task         | Pet     | Duration | Priority
-------+--------------+---------+----------+---------
-07:30 | Morning walk | Biscuit | 30 min   | high
-08:00 | Breakfast    | Fluffy  | 10 min   | high
-12:00 | Brush fur    | Fluffy  | 15 min   | low
-18:00 | Evening walk | Biscuit | 30 min   | high
-----------------------------------------------------
-Total: 85 of 90 min used
-```
-
-The tasks are sorted by start time, and all four fit within Grace's 90-minute daily budget, so none were skipped and no time conflicts were reported.
+The class diagram for the final design is in [`diagrams/uml.mmd`](diagrams/uml.mmd) (also saved as `diagrams/uml_final.mmd`). The initial draft, made before implementation, is in [`diagrams/uml_draft.mmd`](diagrams/uml_draft.mmd).
 
 ## 🧪 Testing PawPal+
 
@@ -138,7 +132,7 @@ All of these features live in `pawpal_system.py`.
 |---------|-----------|-------|
 | Task sorting | `Scheduler.sort_by_time()`, `Scheduler.generate_daily_plan()` | By start time; the planner picks by priority, then time |
 | Filtering | `Scheduler.filter_tasks()`, `Scheduler.get_tasks_for_date()` | By pet, by completion status, or by due date |
-| Conflict handling | `Scheduler.detect_conflicts()` | Same start time or overlapping durations, on the same day |
+| Conflict handling | `Scheduler.find_conflicts()`, `Scheduler.detect_conflicts()` | Same start time or overlapping durations, on the same day |
 | Recurring tasks | `Task.mark_complete()`, `Scheduler.mark_task_complete()` | Daily repeats the next day, weekly repeats a week later |
 
 ### Sorting
@@ -159,7 +153,7 @@ All of these features live in `pawpal_system.py`.
 
 ### Conflict detection
 
-**`Scheduler.detect_conflicts(tasks)`** finds pairs of tasks on the same day whose times clash and returns one warning message per pair:
+**`Scheduler.find_conflicts(tasks)`** finds pairs of tasks on the same day whose times clash and returns them as `(earlier, later)` task pairs. **`Scheduler.detect_conflicts(tasks)`** turns each pair into a warning message:
 
 ```
 Same time: 'Breakfast' at 08:00 and 'Breakfast' at 08:00, different pets (Biscuit, Fluffy)
@@ -184,6 +178,52 @@ Same time: 'Breakfast' at 08:00 and 'Breakfast' at 08:00, different pets (Biscui
   | Daily, done 3 days late (Oct 5) | Oct 2 | Oct 6 |
   | Daily, done a day early (Oct 5) | Oct 6 | Oct 7 |
 
+### Advanced scheduling in action
+
+The scheduler combines two pieces of more advanced logic: **priority-based planning within a time budget** (`Scheduler.generate_daily_plan()`) and **time-block conflict detection** (`Scheduler.find_conflicts()` / `detect_conflicts()`). Here is the end of the `python main.py` output, where Grace has 90 minutes and seven tasks across two pets:
+
+```
+===========================================================
+                 Today's Schedule for Grace
+===========================================================
+Time  | Task         | Pet     | Duration | Priority | Done
+------+--------------+---------+----------+----------+-----
+07:30 | Morning walk | Biscuit | 30 min   | high     | no
+08:00 | Breakfast    | Biscuit | 10 min   | high     | no
+08:00 | Breakfast    | Fluffy  | 10 min   | high     | no
+18:00 | Evening walk | Biscuit | 30 min   | high     | no
+-----------------------------------------------------------
+Skipped: Vet appointment (Fluffy) — needs 45 min, only 10 min left
+Skipped: Brush fur (Fluffy) — needs 15 min, only 10 min left
+Total: 80 of 90 min used
+
+Conflict check:
+  Warning: Same time: 'Breakfast' at 08:00 and 'Breakfast' at 08:00, different pets (Biscuit, Fluffy)
+```
+
+- **Priority wins when time is short:** All four high-priority tasks are planned first (80 minutes). The medium-priority vet appointment (45 min) and low-priority fur brushing (15 min) don't fit in the 10 minutes left, so they're skipped with a reason, even though they start earlier in the day than the evening walk.
+- **Plan in time order:** After choosing tasks by priority, the plan is shown in time order (07:30 → 18:00).
+- **Overlapping time blocks are flagged:** The two 08:00 breakfasts overlap, so a warning is printed. The 07:30 morning walk ends exactly at 08:00, so it's correctly not flagged.
+- **"Give medicine" isn't in the plan** because it was already marked complete earlier in the script.
+
+## 🎨 Output Formatting
+
+PawPal+ formats its output so schedules are easy to scan, in both the terminal and the app. No extra libraries are needed beyond Streamlit.
+
+**Terminal (`main.py`)**
+- **`print_table(title, tasks)`** prints tasks as an aligned table with a centered title, a header row, `|` column separators and `=` / `-` rule lines. Each column's width is computed from its longest value (`max(len(...))`), so names of any length line up, and cells are padded with `str.ljust()`. The title uses `str.center()`.
+- Skipped tasks and conflicts print as labeled lines (`Skipped: ...`, `Warning: ...`) under a **Conflict check** heading, with "No conflicts found." when there are none.
+
+**Streamlit app (`app.py`)**
+- **Tables:** `st.dataframe(..., hide_index=True)` with clean column names. Helper functions format each row:
+  - `task_rows()` builds the rows, with durations like "20 min".
+  - `PRIORITY_LABEL` maps priorities to emoji labels: 🔴 High, 🟡 Medium, 🟢 Low.
+  - `due_label()` shows "Today", "Tomorrow" or a short date.
+  - The Status column shows ✅ Done, ⚠️ Conflict or To do.
+- **Plan summary:** `st.metric` tiles for tasks planned, minutes used, skipped and conflicts, plus `st.progress` for the share of available time used.
+- **Messages:** `st.warning` (with a ⚠️ icon) for each conflict, `st.success` when everything fits or a task is completed, `st.info` for empty states and `st.error` for invalid pet names.
+- **Conflict warnings:** `show_conflicts()` writes each clash in plain words using Markdown bold, with a suggested new time computed by `clock()`, which formats minutes since midnight as `HH:MM`.
+
 ## 📸 Demo Walkthrough
 
 PawPal+ can be used two ways: the Streamlit app (`streamlit run app.py`) for interactive planning, and the demo script (`python main.py`) that prints sample results to the terminal.
@@ -194,23 +234,23 @@ The app is one page, from top to bottom:
 
 | Section | What the user can do |
 |---|---|
-| **Owner** | Set the owner's name and how many minutes they have for pet care today (default 120). |
-| **Add a Pet** | Enter a pet's name, species (dog, cat or other) and age, then click **Add pet**. Empty or duplicate names show an error. A table lists each pet and how many tasks it has. |
+| **Owner** | Set the owner's name and how many minutes they have for pet care today (starts as Grace with 90 minutes, like `main.py`). |
+| **Add a Pet** | Enter a pet's name, species (dog, cat or other) and age, then click **Add pet**. The form suggests the sample pets from `main.py`, Biscuit (dog) then Fluffy (cat). Empty or duplicate names show an error. A table lists each pet and how many tasks it has. |
 | **Schedule a Task** | Choose a pet and enter a task title, start time, duration, priority (low, medium or high) and frequency (once, daily or weekly), then click **Add task**. |
 | **Tasks** | See tasks sorted by time, and filter them by pet (**Show pet**) and status (**Unfinished**, **Completed** or **All**). Tasks in a time clash are marked ⚠️ Conflict, with a warning and a suggested new time below the table. Choose a task under **Task to complete** and click **Mark complete**; a daily or weekly task then comes back for its next occurrence. |
 | **Build Schedule** | Click **Generate schedule** to see today's plan: summary numbers (tasks planned, minutes used, tasks skipped, conflicts), a progress bar for time used, the plan in time order, a "Didn't fit today" table with reasons, and a **Plan explanation** in plain text. |
 
 ### Example workflow
 
-1. **Set up the owner.** Leave the name as Jordan and the available time at 120 minutes.
-2. **Add two pets.** Add Mochi, then change the name to Biscuit and add again. The pet table shows both with 0 tasks.
-3. **Schedule two tasks at the same time.** For Mochi, add "Breakfast" at 08:00, 20 minutes, high priority, daily. Then switch the pet to Biscuit and add the same task. Both rows in the Tasks table are marked ⚠️ Conflict, and a warning appears right away:
-   > **Today: Breakfast (Mochi, 08:00–08:20) overlaps Breakfast (Biscuit, 08:00)**
-   > You'd be caring for Mochi and Biscuit at the same time. **Suggestion:** move Biscuit's Breakfast to 08:20, when Mochi's Breakfast ends. If you can do both together (like feeding two pets), you can ignore this.
+1. **Set up the owner.** The app starts with the same owner as `main.py`: Grace, with 90 minutes available today. Change either if you like.
+2. **Add two pets.** The pet form is pre-filled with Biscuit (dog), so click **Add pet**. The form then switches to Fluffy (cat), so click **Add pet** again. The pet table shows both with 0 tasks.
+3. **Schedule two tasks at the same time.** For Biscuit, add "Breakfast" at 08:00, 10 minutes, high priority, daily. Then switch the pet to Fluffy and add the same task. Both rows in the Tasks table are marked ⚠️ Conflict, and a warning appears right away:
+   > **Today: Breakfast (Biscuit, 08:00–08:10) overlaps Breakfast (Fluffy, 08:00)**
+   > You'd be caring for Biscuit and Fluffy at the same time. **Suggestion:** move Fluffy's Breakfast to 08:10, when Biscuit's Breakfast ends. If you can do both together (like feeding two pets), you can ignore this.
 4. **Add a task that's too long.** For Biscuit, add "Long walk" at 10:00 for 200 minutes. It appears in the table in time order, after the two breakfasts.
-5. **Filter the list.** Set **Show pet** to Biscuit to see only Biscuit's tasks, or set **Show** to Completed to see finished ones.
-6. **View today's schedule.** Click **Generate schedule**. The summary shows 2 planned, 40 / 120 minutes used, 1 skipped and 1 conflict. Both breakfasts are in the plan, and "Long walk" is under "Didn't fit today" with the reason "needs 200 min, only 80 min left".
-7. **Complete a task.** Choose Mochi's Breakfast under **Task to complete** and click **Mark complete**. The app shows "Completed 'Breakfast' for Mochi. Next daily occurrence: Tomorrow." With **Show** set to All, today's breakfast is marked ✅ Done and a new one is due Tomorrow. The conflict warning goes away, because Mochi's breakfast is no longer on today's list.
+5. **Filter the list.** Set **Show pet** to Fluffy to see only Fluffy's tasks, or set **Show** to Completed to see finished ones.
+6. **View today's schedule.** Click **Generate schedule**. The summary shows 2 planned, 20 / 90 minutes used, 1 skipped and 1 conflict. Both breakfasts are in the plan, and "Long walk" is under "Didn't fit today" with the reason "needs 200 min, only 70 min left".
+7. **Complete a task.** Choose Biscuit's Breakfast under **Task to complete** and click **Mark complete**. The app shows "Completed 'Breakfast' for Biscuit. Next daily occurrence: Tomorrow." With **Show** set to All, today's breakfast is marked ✅ Done and a new one is due Tomorrow. The conflict warning goes away, because Biscuit's breakfast is no longer on today's list.
 
 ### Key Scheduler behaviors shown
 
