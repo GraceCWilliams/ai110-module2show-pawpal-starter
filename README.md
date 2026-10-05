@@ -75,19 +75,45 @@ The tasks are sorted by start time, and all four fit within Grace's 90-minute da
 
 ## 🧪 Testing PawPal+
 
+Run the tests from the project folder:
+
 ```bash
-# Run the full test suite:
-pytest
-
-# Run with coverage:
-pytest --cov
+python -m pytest
 ```
 
-Sample test output:
+The tests are in `tests/test_pawpal.py` and cover the scheduling logic in `pawpal_system.py`:
+
+- **Basics:** `mark_complete()` marks a task done, and `add_task()` adds a task to a pet.
+- **Sorting:** tasks added out of order come back in time order, tasks at the same time are kept, and the original list isn't changed.
+- **Filtering:** tasks can be filtered by pet, by completion status, by both, or not at all.
+- **Recurring tasks:** a daily task repeats the next day, a weekly task repeats 7 days later, a one-time task doesn't repeat, and an overdue task repeats from today rather than from its old due date.
+- **Conflict detection:** tasks at the same time and overlapping tasks are flagged, with the right "same pet" or "different pets" wording. Back-to-back tasks and same-time tasks on different days are not flagged.
+- **Daily plan:** the plan stays within the owner's available minutes, keeps high-priority tasks over low ones when time is short, is in time order, and leaves out completed tasks and tasks due on other days.
+
+Output of a successful run:
 
 ```
-# Paste your pytest output here
+============================= test session starts ==============================
+platform darwin -- Python 3.14.7, pytest-9.1.1, pluggy-1.6.0
+rootdir: /Users/grace_computer/Library/Mobile Documents/com~apple~CloudDocs/AI110/ai110-module2show-pawpal-starter
+plugins: anyio-4.15.1
+collected 22 items
+
+tests/test_pawpal.py ......................                              [100%]
+
+============================== 22 passed in 0.02s ==============================
 ```
+
+### Confidence Level: ★★★★☆ (4/5)
+
+All 22 tests pass, and they cover each scheduling feature, including edge cases like back-to-back tasks, overdue recurring tasks and tasks due on other days. The tests check exact values, such as the order of times or the next due date, so they can't pass by accident.
+
+It isn't 5 stars because some things aren't tested or aren't handled yet:
+
+- The Streamlit app (`app.py`) is only checked by hand, not by automated tests.
+- Completing the same recurring task twice adds two copies of the next occurrence.
+- An overdue task that was never completed doesn't show up in later daily plans, because the plan only includes tasks due on that exact day.
+- The planner warns about conflicts but doesn't move tasks to fix them.
 
 ## 📐 Smarter Scheduling
 
