@@ -34,6 +34,10 @@ Before drafting the UML, I identified three core actions a user should be able t
 - Describe one tradeoff your scheduler makes.
 - Why is that tradeoff reasonable for this scenario?
 
+My scheduler detects time conflicts but doesn't resolve them. When it builds the daily plan, it chooses tasks by priority and the owner's total available minutes. It doesn't check whether a task's time slot is already taken. After the plan is built, `detect_conflicts()` looks for tasks on the same day whose times overlap. That includes tasks that start at the same time and tasks where one starts before the other ends. It returns a warning message for each pair, such as "Same time: 'Breakfast' at 08:00 and 'Breakfast' at 08:00, different pets (Biscuit, Fluffy)." The program keeps running, and both tasks stay in the plan. The scheduler doesn't move one of them to a free slot or drop it.
+
+I think this tradeoff is reasonable for a pet owner. Some conflicts aren't real problems. For example, feeding two pets at 08:00 is something one person can usually do together. If the scheduler moved or removed a task by itself, it could push a meal or a dose of medicine to a time the owner didn't choose. Warning the owner leaves the decision with the person who knows their pets and routine. Warnings are also simple to build and test: the check is one sorted pass over the plan, and it can't crash the program. The downside is that the owner has to read the warnings and fix conflicts themselves. A future version could suggest the next free time slot instead of only reporting the problem.
+
 ---
 
 ## 3. AI Collaboration

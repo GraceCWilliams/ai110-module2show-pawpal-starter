@@ -91,14 +91,57 @@ Sample test output:
 
 ## 📐 Smarter Scheduling
 
-> Fill in once you've implemented scheduling logic.
+All of these features live in `pawpal_system.py`.
 
 | Feature | Method(s) | Notes |
 |---------|-----------|-------|
-| Task sorting | | e.g., by priority, duration |
-| Filtering | | e.g., skip tasks if time runs out |
-| Conflict handling | | e.g., overlapping time slots |
-| Recurring tasks | | e.g., daily vs. weekly |
+| Task sorting | `Scheduler.sort_by_time()`, `Scheduler.generate_daily_plan()` | By start time; the planner picks by priority, then time |
+| Filtering | `Scheduler.filter_tasks()`, `Scheduler.get_tasks_for_date()` | By pet, by completion status, or by due date |
+| Conflict handling | `Scheduler.detect_conflicts()` | Same start time or overlapping durations, on the same day |
+| Recurring tasks | `Task.mark_complete()`, `Scheduler.mark_task_complete()` | Daily repeats the next day, weekly repeats a week later |
+
+### Sorting
+
+- **`Scheduler.sort_by_time(tasks)`** returns a new list ordered by start time, earliest first. It sorts on `Task.start_minutes()`, which turns the `"HH:MM"` time into minutes since midnight, so the times are compared as numbers rather than text.
+- **`Scheduler.generate_daily_plan()`** sorts in two steps. First it orders candidate tasks by priority (high, then medium, then low), breaking ties by earlier start time, to decide which tasks fit in the owner's time. Then it sorts the chosen tasks by time so the plan reads like a day's timeline.
+
+### Filtering
+
+- **`Scheduler.filter_tasks(pet_name=None, completed=None)`** filters all of the owner's tasks by pet, by completion status, or by both. A filter left as `None` is skipped:
+  ```python
+  scheduler.filter_tasks(completed=False)                    # all unfinished tasks
+  scheduler.filter_tasks(pet_name="Fluffy")                  # all of Fluffy's tasks
+  scheduler.filter_tasks(pet_name="Biscuit", completed=False) # Biscuit's unfinished tasks
+  ```
+- **`Scheduler.get_tasks_for_date(day)`** returns the unfinished tasks due on a given day (today by default). The daily plan starts from this list.
+- **`Scheduler.generate_daily_plan()`** also leaves out tasks that don't fit in the remaining time. It returns each skipped task with a reason, such as "needs 45 min, only 10 min left".
+
+### Conflict detection
+
+**`Scheduler.detect_conflicts(tasks)`** finds pairs of tasks on the same day whose times clash and returns one warning message per pair:
+
+```
+Same time: 'Breakfast' at 08:00 and 'Breakfast' at 08:00, different pets (Biscuit, Fluffy)
+```
+
+- **Same time vs. overlap:** It catches tasks that start at the same minute, and also tasks where one starts before the other ends (for example, a 30-minute walk at 08:00 and grooming at 08:20).
+- **Same pet vs. different pets:** Each warning says which. Same pet means that pet is double-booked; different pets means the owner would need to be in two places at once.
+- **Not counted as conflicts:** tasks that run back to back (one ends at 08:30, the next starts at 08:30) and tasks at the same time on different days.
+- **How it works:** It sorts tasks by due date and then start time, so tasks that could clash end up next to each other. For each task it checks the tasks after it and stops as soon as one starts after the current task ends, so it doesn't compare every pair.
+- **Warnings, not errors:** It returns messages instead of raising an exception, so a conflict never crashes the program. Both tasks stay in the plan, and the owner decides what to change. `main.py`, `app.py` and `Scheduler.explain_plan()` all show these warnings.
+
+### Recurring tasks
+
+- **`Task.mark_complete()`** marks a task done. If the task's frequency is `"daily"` or `"weekly"`, it returns a copy of the task that isn't done yet and has the next due date. For a `"once"` task it returns `None`.
+- **`Scheduler.mark_task_complete(task)`** calls `Task.mark_complete()` and adds the new copy to the right pet, so the next occurrence shows up automatically. Call this method rather than `Task.mark_complete()` directly, or the new copy won't be added to the pet.
+- **Next due date:** It's calculated with `timedelta` (`timedelta(days=1)` for daily, `timedelta(weeks=1)` for weekly), which handles month and year boundaries. It counts from today, or from the task's due date if the task was finished early:
+
+  | Case | Was due | Next due |
+  |---|---|---|
+  | Daily, done on time (Oct 5) | Oct 5 | Oct 6 |
+  | Weekly, done on time (Oct 5) | Oct 5 | Oct 12 |
+  | Daily, done 3 days late (Oct 5) | Oct 2 | Oct 6 |
+  | Daily, done a day early (Oct 5) | Oct 6 | Oct 7 |
 
 ## 📸 Demo Walkthrough
 

@@ -33,12 +33,17 @@ class Task:
             raise ValueError("duration_minutes must be positive")
 
     def mark_complete(self) -> Task | None:
-        """Mark this task done and return the next occurrence if it recurs."""
+        """Mark this task done and return the next occurrence if it recurs.
+
+        The next due date counts from today (e.g. daily -> today + 1 day),
+        or from the original due date if the task was finished early.
+        """
         self.completed = True
         step = FREQUENCY_STEP.get(self.frequency)
         if step is None:
             return None
-        return replace(self, completed=False, due_date=self.due_date + step)
+        base = max(self.due_date, date.today())
+        return replace(self, completed=False, due_date=base + step)
 
     def start_minutes(self) -> int:
         """Minutes since midnight when this task starts."""
@@ -106,13 +111,23 @@ class Scheduler:
         ]
 
     def sort_by_time(self, tasks: list[Task]) -> list[Task]:
-        """Return the tasks sorted by start time, earliest first."""
+        """Return the tasks sorted by start time, earliest first.
+
+        Sorts on minutes since midnight (Task.start_minutes), the same key
+        detect_conflicts and generate_daily_plan use. Returns a new list;
+        the original list isn't changed.
+        """
         return sorted(tasks, key=Task.start_minutes)
 
     def filter_tasks(
         self, pet_name: str | None = None, completed: bool | None = None
     ) -> list[Task]:
-        """Filter all tasks by pet name and/or completion status."""
+        """Filter all tasks by pet name and/or completion status.
+
+        A filter left as None is skipped, so filter_tasks() returns every
+        task and filter_tasks(pet_name="Mochi", completed=False) returns
+        Mochi's unfinished tasks. Order follows Owner.get_all_tasks.
+        """
         tasks = self.owner.get_all_tasks()
         if pet_name is not None:
             tasks = [t for t in tasks if t.pet_name == pet_name]
@@ -121,21 +136,34 @@ class Scheduler:
         return tasks
 
     def detect_conflicts(self, tasks: list[Task]) -> list[str]:
-        """Return a warning for each pair of tasks whose times overlap."""
+        """Return a warning for each pair of tasks on the same day whose times overlap.
+
+        Each warning says whether the tasks start at the same time or just
+        overlap, and whether they're for the same pet or different pets.
+        """
         warnings = []
-        ordered = self.sort_by_time(tasks)
+        # Sort by day, then start time, so overlapping tasks end up next to each other.
+        ordered = sorted(tasks, key=lambda t: (t.due_date, t.start_minutes()))
         for i, a in enumerate(ordered):
             for b in ordered[i + 1:]:
-                if b.start_minutes() >= a.end_minutes():
+                # Every later task is on a later day or starts after `a` ends.
+                if b.due_date != a.due_date or b.start_minutes() >= a.end_minutes():
                     break
+                kind = "Same time" if a.time == b.time else "Overlap"
+                who = (f"same pet ({a.pet_name})" if a.pet_name == b.pet_name
+                       else f"different pets ({a.pet_name}, {b.pet_name})")
                 warnings.append(
-                    f"'{a.description}' ({a.pet_name}, {a.time}) overlaps "
-                    f"'{b.description}' ({b.pet_name}, {b.time})"
+                    f"{kind}: '{a.description}' at {a.time} and "
+                    f"'{b.description}' at {b.time}, {who}"
                 )
         return warnings
 
     def mark_task_complete(self, task: Task) -> Task | None:
-        """Complete a task; if it recurs, add the next occurrence to its pet."""
+        """Complete a task; if it recurs, add the next occurrence to its pet.
+
+        Task.mark_complete works out the next due date (daily: +1 day,
+        weekly: +1 week). Returns the new task, or None for a one-time task.
+        """
         next_task = task.mark_complete()
         if next_task is not None:
             pet = self.owner.get_pet(task.pet_name)
