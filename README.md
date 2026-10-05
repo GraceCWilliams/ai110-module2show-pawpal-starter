@@ -42,6 +42,21 @@ pip install -r requirements.txt
 6. Connect your logic to the Streamlit UI in `app.py`.
 7. Refine UML so it matches what you actually built.
 
+## ✨ Features
+
+- **Sorting by time:** Tasks are ordered by start time, earliest first, by turning each `"HH:MM"` time into minutes since midnight. (`Scheduler.sort_by_time()`)
+- **Priority-first daily planning:** The planner goes through today's tasks from high to low priority, with earlier tasks first when priorities tie. It adds each task that still fits in the owner's available minutes, then shows the chosen tasks in time order. (`Scheduler.generate_daily_plan()`)
+- **Skipped-task reasons:** Tasks that don't fit in the remaining time are listed with the reason, such as "needs 45 min, only 10 min left". (`Scheduler.generate_daily_plan()`)
+- **Filtering by pet and status:** Tasks can be narrowed to one pet, to finished or unfinished tasks, or both. (`Scheduler.filter_tasks()`)
+- **Due-date filtering:** The daily plan only considers unfinished tasks due that day. (`Scheduler.get_tasks_for_date()`)
+- **Conflict warnings:** Tasks on the same day whose times overlap are flagged, whether they start at the same minute or one starts before the other ends. Each warning says whether it's the same pet or different pets. Tasks are sorted first, so each task is only compared with the tasks right after it. Conflicts produce warnings, not errors, so the program keeps running. (`Scheduler.find_conflicts()`, `Scheduler.detect_conflicts()`)
+- **Suggested fixes in the app:** The Streamlit app shows each conflict in plain words, marks the clashing tasks in the table, and suggests moving the later task to when the earlier one ends. (`app.py`)
+- **Daily and weekly recurrence:** Completing a daily or weekly task automatically adds the next occurrence to the same pet, using `timedelta` for the date math. The next date counts from today, so an overdue task doesn't come back with a date in the past. (`Task.mark_complete()`, `Scheduler.mark_task_complete()`)
+- **Plan explanation:** The plan can be printed as plain text, with each task, every skipped task and its reason, conflict warnings and the total time used. (`Scheduler.explain_plan()`)
+- **Input validation:** A task with an invalid time, priority, frequency or duration is rejected when it's created, so bad data never reaches the scheduler. (`Task.__post_init__()`)
+
+See [Smarter Scheduling](#-smarter-scheduling) below for more detail and examples.
+
 ## 🛠️ Implementation Summary
 
 The scheduling logic lives in `pawpal_system.py` and is built from four classes:
@@ -171,12 +186,141 @@ Same time: 'Breakfast' at 08:00 and 'Breakfast' at 08:00, different pets (Biscui
 
 ## 📸 Demo Walkthrough
 
-Describe your app in numbered steps so a reader can follow along without watching a video:
+PawPal+ can be used two ways: the Streamlit app (`streamlit run app.py`) for interactive planning, and the demo script (`python main.py`) that prints sample results to the terminal.
 
-1. <!-- Describe this step -->
-2. <!-- Describe this step -->
-3. <!-- Describe this step -->
-4. <!-- Describe this step -->
-5. <!-- Add more steps as needed -->
+### Main UI features
+
+The app is one page, from top to bottom:
+
+| Section | What the user can do |
+|---|---|
+| **Owner** | Set the owner's name and how many minutes they have for pet care today (default 120). |
+| **Add a Pet** | Enter a pet's name, species (dog, cat or other) and age, then click **Add pet**. Empty or duplicate names show an error. A table lists each pet and how many tasks it has. |
+| **Schedule a Task** | Choose a pet and enter a task title, start time, duration, priority (low, medium or high) and frequency (once, daily or weekly), then click **Add task**. |
+| **Tasks** | See tasks sorted by time, and filter them by pet (**Show pet**) and status (**Unfinished**, **Completed** or **All**). Tasks in a time clash are marked ⚠️ Conflict, with a warning and a suggested new time below the table. Choose a task under **Task to complete** and click **Mark complete**; a daily or weekly task then comes back for its next occurrence. |
+| **Build Schedule** | Click **Generate schedule** to see today's plan: summary numbers (tasks planned, minutes used, tasks skipped, conflicts), a progress bar for time used, the plan in time order, a "Didn't fit today" table with reasons, and a **Plan explanation** in plain text. |
+
+### Example workflow
+
+1. **Set up the owner.** Leave the name as Jordan and the available time at 120 minutes.
+2. **Add two pets.** Add Mochi, then change the name to Biscuit and add again. The pet table shows both with 0 tasks.
+3. **Schedule two tasks at the same time.** For Mochi, add "Breakfast" at 08:00, 20 minutes, high priority, daily. Then switch the pet to Biscuit and add the same task. Both rows in the Tasks table are marked ⚠️ Conflict, and a warning appears right away:
+   > **Today: Breakfast (Mochi, 08:00–08:20) overlaps Breakfast (Biscuit, 08:00)**
+   > You'd be caring for Mochi and Biscuit at the same time. **Suggestion:** move Biscuit's Breakfast to 08:20, when Mochi's Breakfast ends. If you can do both together (like feeding two pets), you can ignore this.
+4. **Add a task that's too long.** For Biscuit, add "Long walk" at 10:00 for 200 minutes. It appears in the table in time order, after the two breakfasts.
+5. **Filter the list.** Set **Show pet** to Biscuit to see only Biscuit's tasks, or set **Show** to Completed to see finished ones.
+6. **View today's schedule.** Click **Generate schedule**. The summary shows 2 planned, 40 / 120 minutes used, 1 skipped and 1 conflict. Both breakfasts are in the plan, and "Long walk" is under "Didn't fit today" with the reason "needs 200 min, only 80 min left".
+7. **Complete a task.** Choose Mochi's Breakfast under **Task to complete** and click **Mark complete**. The app shows "Completed 'Breakfast' for Mochi. Next daily occurrence: Tomorrow." With **Show** set to All, today's breakfast is marked ✅ Done and a new one is due Tomorrow. The conflict warning goes away, because Mochi's breakfast is no longer on today's list.
+
+### Key Scheduler behaviors shown
+
+- **Sorting by time:** Tasks are always listed earliest first, however they were added. (`Scheduler.sort_by_time()`)
+- **Filtering:** The **Show pet** and **Show** controls, and the filtered tables in `main.py`. (`Scheduler.filter_tasks()`)
+- **Priority-first planning within a time budget:** The plan keeps high-priority tasks and skips what doesn't fit, with a reason for each. (`Scheduler.generate_daily_plan()`)
+- **Conflict warnings:** Same-time and overlapping tasks are flagged as warnings, not errors, with a suggested new time in the app. (`Scheduler.find_conflicts()`, `Scheduler.detect_conflicts()`)
+- **Daily and weekly recurrence:** Completing a repeating task adds its next occurrence automatically. (`Scheduler.mark_task_complete()`)
+
+### Sample CLI output
+
+`main.py` creates an owner (Grace, 90 minutes) with two pets, Biscuit the dog and Fluffy the cat. It adds seven tasks out of time order, including two breakfasts at 08:00, and marks "Give medicine" complete. It then prints the tasks as added, sorted by time, and filtered several ways, followed by today's schedule and a conflict check.
+
+```bash
+python main.py
+```
+
+```
+
+==============================================================
+                   All tasks (order added)
+==============================================================
+Time  | Task            | Pet     | Duration | Priority | Done
+------+-----------------+---------+----------+----------+-----
+18:00 | Evening walk    | Biscuit | 30 min   | high     | no
+07:30 | Morning walk    | Biscuit | 30 min   | high     | no
+09:15 | Give medicine   | Biscuit | 5 min    | high     | no
+08:00 | Breakfast       | Biscuit | 10 min   | high     | no
+15:30 | Vet appointment | Fluffy  | 45 min   | medium   | no
+12:00 | Brush fur       | Fluffy  | 15 min   | low      | no
+08:00 | Breakfast       | Fluffy  | 10 min   | high     | no
+--------------------------------------------------------------
+
+==============================================================
+                  All tasks (sorted by time)
+==============================================================
+Time  | Task            | Pet     | Duration | Priority | Done
+------+-----------------+---------+----------+----------+-----
+07:30 | Morning walk    | Biscuit | 30 min   | high     | no
+08:00 | Breakfast       | Biscuit | 10 min   | high     | no
+08:00 | Breakfast       | Fluffy  | 10 min   | high     | no
+09:15 | Give medicine   | Biscuit | 5 min    | high     | no
+12:00 | Brush fur       | Fluffy  | 15 min   | low      | no
+15:30 | Vet appointment | Fluffy  | 45 min   | medium   | no
+18:00 | Evening walk    | Biscuit | 30 min   | high     | no
+--------------------------------------------------------------
+
+============================================================
+                      Completed tasks
+============================================================
+Time  | Task          | Pet     | Duration | Priority | Done
+------+---------------+---------+----------+----------+-----
+09:15 | Give medicine | Biscuit | 5 min    | high     | yes
+------------------------------------------------------------
+
+==============================================================
+                  Incomplete tasks (sorted)
+==============================================================
+Time  | Task            | Pet     | Duration | Priority | Done
+------+-----------------+---------+----------+----------+-----
+07:30 | Morning walk    | Biscuit | 30 min   | high     | no
+08:00 | Breakfast       | Biscuit | 10 min   | high     | no
+08:00 | Breakfast       | Fluffy  | 10 min   | high     | no
+12:00 | Brush fur       | Fluffy  | 15 min   | low      | no
+15:30 | Vet appointment | Fluffy  | 45 min   | medium   | no
+18:00 | Evening walk    | Biscuit | 30 min   | high     | no
+--------------------------------------------------------------
+
+=============================================================
+                   Fluffy's tasks (sorted)
+=============================================================
+Time  | Task            | Pet    | Duration | Priority | Done
+------+-----------------+--------+----------+----------+-----
+08:00 | Breakfast       | Fluffy | 10 min   | high     | no
+12:00 | Brush fur       | Fluffy | 15 min   | low      | no
+15:30 | Vet appointment | Fluffy | 45 min   | medium   | no
+-------------------------------------------------------------
+
+===========================================================
+            Biscuit's incomplete tasks (sorted)
+===========================================================
+Time  | Task         | Pet     | Duration | Priority | Done
+------+--------------+---------+----------+----------+-----
+07:30 | Morning walk | Biscuit | 30 min   | high     | no
+08:00 | Breakfast    | Biscuit | 10 min   | high     | no
+18:00 | Evening walk | Biscuit | 30 min   | high     | no
+-----------------------------------------------------------
+
+===========================================================
+                 Today's Schedule for Grace
+===========================================================
+Time  | Task         | Pet     | Duration | Priority | Done
+------+--------------+---------+----------+----------+-----
+07:30 | Morning walk | Biscuit | 30 min   | high     | no
+08:00 | Breakfast    | Biscuit | 10 min   | high     | no
+08:00 | Breakfast    | Fluffy  | 10 min   | high     | no
+18:00 | Evening walk | Biscuit | 30 min   | high     | no
+-----------------------------------------------------------
+Skipped: Vet appointment (Fluffy) — needs 45 min, only 10 min left
+Skipped: Brush fur (Fluffy) — needs 15 min, only 10 min left
+Total: 80 of 90 min used
+
+Conflict check:
+  Warning: Same time: 'Breakfast' at 08:00 and 'Breakfast' at 08:00, different pets (Biscuit, Fluffy)
+```
+
+What the output shows:
+- **Sorting:** The "sorted by time" table puts the tasks in order from 07:30 to 18:00.
+- **Filtering:** "Completed tasks" shows only Give medicine, and the per-pet tables show only that pet's tasks.
+- **Planning:** The schedule fits 80 of Grace's 90 minutes. The vet appointment and fur brushing are skipped because they're lower priority and don't fit in the 10 minutes left.
+- **Conflict warning:** The two 08:00 breakfasts are flagged, and the program still finishes normally.
 
 **Screenshot or video** *(optional)*: <!-- Insert a screenshot or link to a demo video here -->

@@ -135,13 +135,13 @@ class Scheduler:
             tasks = [t for t in tasks if t.completed == completed]
         return tasks
 
-    def detect_conflicts(self, tasks: list[Task]) -> list[str]:
-        """Return a warning for each pair of tasks on the same day whose times overlap.
+    def find_conflicts(self, tasks: list[Task]) -> list[tuple[Task, Task]]:
+        """Return each pair of tasks on the same day whose times overlap.
 
-        Each warning says whether the tasks start at the same time or just
-        overlap, and whether they're for the same pet or different pets.
+        In each pair (a, b), a starts no later than b, so b is the task that
+        would need to move.
         """
-        warnings = []
+        conflicts = []
         # Sort by day, then start time, so overlapping tasks end up next to each other.
         ordered = sorted(tasks, key=lambda t: (t.due_date, t.start_minutes()))
         for i, a in enumerate(ordered):
@@ -149,13 +149,24 @@ class Scheduler:
                 # Every later task is on a later day or starts after `a` ends.
                 if b.due_date != a.due_date or b.start_minutes() >= a.end_minutes():
                     break
-                kind = "Same time" if a.time == b.time else "Overlap"
-                who = (f"same pet ({a.pet_name})" if a.pet_name == b.pet_name
-                       else f"different pets ({a.pet_name}, {b.pet_name})")
-                warnings.append(
-                    f"{kind}: '{a.description}' at {a.time} and "
-                    f"'{b.description}' at {b.time}, {who}"
-                )
+                conflicts.append((a, b))
+        return conflicts
+
+    def detect_conflicts(self, tasks: list[Task]) -> list[str]:
+        """Return a warning for each pair of tasks on the same day whose times overlap.
+
+        Each warning says whether the tasks start at the same time or just
+        overlap, and whether they're for the same pet or different pets.
+        """
+        warnings = []
+        for a, b in self.find_conflicts(tasks):
+            kind = "Same time" if a.time == b.time else "Overlap"
+            who = (f"same pet ({a.pet_name})" if a.pet_name == b.pet_name
+                   else f"different pets ({a.pet_name}, {b.pet_name})")
+            warnings.append(
+                f"{kind}: '{a.description}' at {a.time} and "
+                f"'{b.description}' at {b.time}, {who}"
+            )
         return warnings
 
     def mark_task_complete(self, task: Task) -> Task | None:
